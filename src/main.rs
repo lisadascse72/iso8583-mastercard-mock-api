@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tower_http::cors::CorsLayer;
+use std::env;
 
 // ============================================================================
 // Data Structures for Mastercard ISO 8583
@@ -16,70 +17,70 @@ use tower_http::cors::CorsLayer;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthorizationRequest {
-    pub mti: String,                    // Message Type Indicator (0100)
-    pub de2: String,                    // Primary Account Number (PAN)
-    pub de3: String,                    // Processing Code
-    pub de4: String,                    // Amount
-    pub de7: String,                    // Transmission Date & Time (MMDDhhmmss UTC)
-    pub de11: String,                   // Systems Trace Audit Number (STAN)
-    pub de18: String,                   // Merchant Type
-    pub de32: String,                   // Acquiring Institution ID
-    pub de48: String,                   // Additional Data (Private Use)
-    pub de49: String,                   // Currency Code
-    pub de61: String,                   // POS Data
+    pub mti: String,
+    pub de2: String,
+    pub de3: String,
+    pub de4: String,
+    pub de7: String,
+    pub de11: String,
+    pub de18: String,
+    pub de32: String,
+    pub de48: String,
+    pub de49: String,
+    pub de61: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthorizationResponse {
-    pub mti: String,                    // Message Type Indicator (0110)
-    pub de2: String,                    // Echo: Primary Account Number
-    pub de3: String,                    // Echo: Processing Code
-    pub de4: String,                    // Echo: Amount
-    pub de7: String,                    // Echo: Transmission Date & Time
-    pub de11: String,                   // Echo: STAN
-    pub de18: String,                   // Echo: Merchant Type
-    pub de32: String,                   // Echo: Acquiring Institution ID
-    pub de39: String,                   // Response Code (00=success, 05=invalid, 51=insufficient)
-    pub de48: String,                   // Echo: Additional Data
-    pub de49: String,                   // Echo: Currency Code
-    pub de61: String,                   // Echo: POS Data
-    pub response_message: String,       // Human-readable response
+    pub mti: String,
+    pub de2: String,
+    pub de3: String,
+    pub de4: String,
+    pub de7: String,
+    pub de11: String,
+    pub de18: String,
+    pub de32: String,
+    pub de39: String,
+    pub de48: String,
+    pub de49: String,
+    pub de61: String,
+    pub response_message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReversalRequest {
-    pub mti: String,                    // Message Type Indicator (0400)
-    pub de2: String,                    // Primary Account Number
-    pub de3: String,                    // Processing Code
-    pub de4: String,                    // Amount
-    pub de7: String,                    // Transmission Date & Time
-    pub de11: String,                   // Systems Trace Audit Number (STAN)
-    pub de18: String,                   // Merchant Type
-    pub de22: String,                   // Point of Service Entry Mode
-    pub de32: String,                   // Acquiring Institution ID
-    pub de39: String,                   // Original Response Code
-    pub de48: String,                   // Additional Data
-    pub de49: String,                   // Currency Code
-    pub de61: String,                   // POS Data
-    pub de90: String,                   // Original Data Elements
+    pub mti: String,
+    pub de2: String,
+    pub de3: String,
+    pub de4: String,
+    pub de7: String,
+    pub de11: String,
+    pub de18: String,
+    pub de22: String,
+    pub de32: String,
+    pub de39: String,
+    pub de48: String,
+    pub de49: String,
+    pub de61: String,
+    pub de90: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReversalResponse {
-    pub mti: String,                    // Message Type Indicator (0410)
-    pub de2: String,                    // Echo: Primary Account Number
-    pub de3: String,                    // Echo: Processing Code
-    pub de4: String,                    // Echo: Amount
-    pub de7: String,                    // Echo: Transmission Date & Time
-    pub de11: String,                   // Echo: STAN
-    pub de18: String,                   // Echo: Merchant Type
-    pub de32: String,                   // Echo: Acquiring Institution ID
-    pub de39: String,                   // Response Code (00=success, 94=duplicate)
-    pub de48: String,                   // Echo: Additional Data
-    pub de49: String,                   // Echo: Currency Code
-    pub de61: String,                   // Echo: POS Data
-    pub de90: String,                   // Echo: Original Data Elements
-    pub response_message: String,       // Human-readable response
+    pub mti: String,
+    pub de2: String,
+    pub de3: String,
+    pub de4: String,
+    pub de7: String,
+    pub de11: String,
+    pub de18: String,
+    pub de32: String,
+    pub de39: String,
+    pub de48: String,
+    pub de49: String,
+    pub de61: String,
+    pub de90: String,
+    pub response_message: String,
 }
 
 // ============================================================================
@@ -96,7 +97,6 @@ pub struct Transaction {
 }
 
 pub struct AppState {
-    // HashMap: STAN -> Transaction (simulate database of authorized transactions)
     pub authorized_transactions: Mutex<HashMap<String, Transaction>>,
 }
 
@@ -108,10 +108,10 @@ async fn authorize(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<AuthorizationRequest>,
 ) -> impl IntoResponse {
+
     println!("\n========== AUTHORIZATION REQUEST ==========");
     println!("{}", serde_json::to_string_pretty(&payload).unwrap());
 
-    // Validation: Check MTI
     if payload.mti != "0100" {
         let response = AuthorizationResponse {
             mti: "0110".to_string(),
@@ -122,25 +122,22 @@ async fn authorize(
             de11: payload.de11.clone(),
             de18: payload.de18.clone(),
             de32: payload.de32.clone(),
-            de39: "03".to_string(), // Invalid MTI
+            de39: "03".to_string(),
             de48: payload.de48.clone(),
             de49: payload.de49.clone(),
             de61: payload.de61.clone(),
             response_message: "Invalid MTI for Authorization Request".to_string(),
         };
-        println!("\n========== AUTHORIZATION RESPONSE ==========");
-        println!("{}", serde_json::to_string_pretty(&response).unwrap());
+
         return (StatusCode::OK, Json(response));
     }
 
-    // Business Logic: Approve if PAN starts with "4", else reject
     let response_code = if payload.de2.starts_with('4') {
-        "00" // Success
+        "00"
     } else {
-        "05" // Not authorized by financial institution
+        "05"
     };
 
-    // Store authorized transaction in memory
     if response_code == "00" {
         let transaction = Transaction {
             pan: payload.de2.clone(),
@@ -149,10 +146,12 @@ async fn authorize(
             timestamp: payload.de7.clone(),
             response_code: response_code.to_string(),
         };
-        state.authorized_transactions.lock().unwrap().insert(
-            payload.de11.clone(),
-            transaction,
-        );
+
+        state
+            .authorized_transactions
+            .lock()
+            .unwrap()
+            .insert(payload.de11.clone(), transaction);
     }
 
     let response = AuthorizationResponse {
@@ -168,10 +167,10 @@ async fn authorize(
         de48: payload.de48.clone(),
         de49: payload.de49.clone(),
         de61: payload.de61.clone(),
-        response_message: match response_code {
-            "00" => "Transaction Approved".to_string(),
-            "05" => "Transaction Not Authorized".to_string(),
-            _ => "Unknown Response".to_string(),
+        response_message: if response_code == "00" {
+            "Transaction Approved".to_string()
+        } else {
+            "Transaction Not Authorized".to_string()
         },
     };
 
@@ -185,10 +184,10 @@ async fn reversal(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<ReversalRequest>,
 ) -> impl IntoResponse {
+
     println!("\n========== REVERSAL REQUEST ==========");
     println!("{}", serde_json::to_string_pretty(&payload).unwrap());
 
-    // Validation: Check MTI
     if payload.mti != "0400" {
         let response = ReversalResponse {
             mti: "0410".to_string(),
@@ -199,24 +198,22 @@ async fn reversal(
             de11: payload.de11.clone(),
             de18: payload.de18.clone(),
             de32: payload.de32.clone(),
-            de39: "03".to_string(), // Invalid MTI
+            de39: "03".to_string(),
             de48: payload.de48.clone(),
             de49: payload.de49.clone(),
             de61: payload.de61.clone(),
             de90: payload.de90.clone(),
             response_message: "Invalid MTI for Reversal Request".to_string(),
         };
-        println!("\n========== REVERSAL RESPONSE ==========");
-        println!("{}", serde_json::to_string_pretty(&response).unwrap());
+
         return (StatusCode::OK, Json(response));
     }
 
-    // Business Logic: Check if original transaction exists
     let transactions = state.authorized_transactions.lock().unwrap();
     let response_code = if transactions.contains_key(&payload.de11) {
-        "00" // Success - transaction found and reversed
+        "00"
     } else {
-        "94" // Duplicate reversal or reversal amount mismatch
+        "94"
     };
 
     let response = ReversalResponse {
@@ -233,10 +230,10 @@ async fn reversal(
         de49: payload.de49.clone(),
         de61: payload.de61.clone(),
         de90: payload.de90.clone(),
-        response_message: match response_code {
-            "00" => "Reversal Approved".to_string(),
-            "94" => "Duplicate Reversal or Original Not Found".to_string(),
-            _ => "Unknown Response".to_string(),
+        response_message: if response_code == "00" {
+            "Reversal Approved".to_string()
+        } else {
+            "Duplicate Reversal or Original Not Found".to_string()
         },
     };
 
@@ -247,7 +244,7 @@ async fn reversal(
 }
 
 // ============================================================================
-// Main Application
+// Main Application (Render-Compatible)
 // ============================================================================
 
 #[tokio::main]
@@ -262,17 +259,20 @@ async fn main() {
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+    // ✅ REQUIRED FOR RENDER
+    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let bind_addr = format!("0.0.0.0:{}", port);
+
+    let listener = tokio::net::TcpListener::bind(&bind_addr)
         .await
-        .expect("Failed to bind to port 3000");
+        .expect("Failed to bind to port");
 
     println!("\n╔════════════════════════════════════════════════════════════════╗");
-    println!("║         Mastercard ISO 8583 Mock API Server                   ║");
-    println!("║                  Server running on port 3000                   ║");
+    println!("║   Mastercard ISO 8583 Mock API Server (Rust + Axum)           ║");
+    println!("║   Server running on {}", bind_addr);
     println!("║                                                                ║");
-    println!("║  Endpoints:                                                    ║");
-    println!("║    POST /authorize  - Authorization request (MTI 0100)        ║");
-    println!("║    POST /reversal   - Reversal request (MTI 0400)             ║");
+    println!("║   POST /authorize  → MTI 0100                                 ║");
+    println!("║   POST /reversal   → MTI 0400                                 ║");
     println!("╚════════════════════════════════════════════════════════════════╝\n");
 
     axum::serve(listener, app)
